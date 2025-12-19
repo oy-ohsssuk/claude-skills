@@ -96,8 +96,14 @@ class ConfluenceOptimizedMCP {
         { selector: "video", format: "skip" },
 
         // 중요한 구조만 유지 (순서 중요 - 가장 마지막에 위치)
-        { selector: "h1,h2,h3,h4,h5,h6", options: { uppercase: false } },
-        { selector: "ul,ol", options: { itemPrefix: "- " } },
+        { selector: "h1", format: "heading", options: { uppercase: false } },
+        { selector: "h2", format: "heading", options: { uppercase: false } },
+        { selector: "h3", format: "heading", options: { uppercase: false } },
+        { selector: "h4", format: "heading", options: { uppercase: false } },
+        { selector: "h5", format: "heading", options: { uppercase: false } },
+        { selector: "h6", format: "heading", options: { uppercase: false } },
+        { selector: "ul", format: "unorderedList", options: { itemPrefix: "- " } },
+        { selector: "ol", format: "orderedList" },
         { selector: "table", format: "dataTable" },
         { selector: "p", format: "paragraph" },
         { selector: "blockquote", format: "blockString" },
