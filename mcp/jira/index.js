@@ -74,19 +74,24 @@ class OptimizedJiraMCP {
         { selector: 'meta', format: 'skip' },
 
         // 스타일 관련 클래스들 처리
-        { selector: '.error', options: { uppercase: false } },
-        { selector: 'span.error', options: { uppercase: false } },
+        { selector: '.error', format: 'inline' },
+        { selector: 'span.error', format: 'inline' },
 
         // 리스트 포맷팅
-        { selector: 'ul', options: { itemPrefix: '• ' } },
-        { selector: 'ol', options: { itemPrefix: '' } },
+        { selector: 'ul', format: 'unorderedList', options: { itemPrefix: '• ' } },
+        { selector: 'ol', format: 'orderedList' },
 
         // 헤더 정리
-        { selector: 'h1, h2, h3, h4, h5, h6', options: { uppercase: false } },
+        { selector: 'h1', format: 'heading', options: { uppercase: false } },
+        { selector: 'h2', format: 'heading', options: { uppercase: false } },
+        { selector: 'h3', format: 'heading', options: { uppercase: false } },
+        { selector: 'h4', format: 'heading', options: { uppercase: false } },
+        { selector: 'h5', format: 'heading', options: { uppercase: false } },
+        { selector: 'h6', format: 'heading', options: { uppercase: false } },
 
         // 단락 정리
-        { selector: 'p', options: { leadingLineBreaks: 1, trailingLineBreaks: 1 } },
-        { selector: 'br', replacement: '\n' }
+        { selector: 'p', format: 'block', options: { leadingLineBreaks: 1, trailingLineBreaks: 1 } },
+        { selector: 'br', format: 'lineBreak' }
       ],
       baseElements: {
         selectors: ['body', 'article', 'main', 'div', 'p']

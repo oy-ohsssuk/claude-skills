@@ -114,4 +114,8 @@ dist
 
 .claude
 
+# IDE
+.idea/
+.vscode/
+
 timeline-dashboard/*
