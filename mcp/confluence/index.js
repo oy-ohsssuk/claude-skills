@@ -1398,22 +1398,68 @@ class ConfluenceOptimizedMCP {
         for (const line of lines) {
           if (!line.trim()) continue;
 
-          const request = JSON.parse(line);
-          const response = await this.handleRequest(request);
+          // Add better error handling for JSON parsing
+          let request;
+          try {
+            request = JSON.parse(line);
+          } catch (parseError) {
+            console.error(`[CONFLUENCE MCP] Failed to parse JSON: ${line}`, parseError);
+            // Send proper error response
+            console.log(
+              JSON.stringify({
+                jsonrpc: "2.0",
+                id: 0,
+                error: {
+                  code: -32700,
+                  message: "Parse error",
+                },
+              })
+            );
+            continue;
+          }
 
-          console.log(
-            JSON.stringify({
-              jsonrpc: "2.0",
-              id: request.id,
-              result: response,
-            })
-          );
+          try {
+            const response = await this.handleRequest(request);
+
+            console.log(
+              JSON.stringify({
+                jsonrpc: "2.0",
+                id: request.id,
+                result: response,
+              })
+            );
+          } catch (requestError) {
+            console.error(`[CONFLUENCE MCP] Request handling error:`, requestError);
+            console.log(
+              JSON.stringify({
+                jsonrpc: "2.0",
+                id: request.id || 0,
+                error: {
+                  code: -32603,
+                  message: requestError.message,
+                },
+              })
+            );
+          }
         }
       } catch (error) {
+        // Try to get the request id if possible, otherwise use a default
+        let requestId = 0;
+        try {
+          if (data.includes('"id"')) {
+            const idMatch = data.match(/"id"\s*:\s*([^,}\s]+)/);
+            if (idMatch) {
+              requestId = JSON.parse(idMatch[1]);
+            }
+          }
+        } catch (e) {
+          // Use default id if parsing fails
+        }
+
         console.log(
           JSON.stringify({
             jsonrpc: "2.0",
-            id: null,
+            id: requestId,
             error: {
               code: -32603,
               message: error.message,

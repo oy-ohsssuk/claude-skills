@@ -521,147 +521,151 @@ class OptimizedJiraMCP {
   async handleRequest(request) {
     const { method, params = {} } = request;
 
-    switch (method) {
-      case 'initialize':
-        return {
-          protocolVersion: '2024-11-05',
-          capabilities: { tools: {} },
-          serverInfo: {
-            name: 'jira-ultra-optimized',
-            version: '1.2.0',
-            description: 'Ultra-Optimized Jira MCP - 90% 토큰 절약, 필드 선택, 한국어 지원'
-          }
-        };
-
-      case 'tools/list':
-        return {
-          tools: [
-            {
-              name: 'get_projects',
-              description: 'Jira 프로젝트 목록 조회 (간소화된 정보)',
-              inputSchema: { type: 'object', properties: {} }
-            },
-            {
-              name: 'get_issue',
-              description: '특정 Jira 이슈 상세 조회 (필수 정보만)',
-              inputSchema: {
-                type: 'object',
-                properties: {
-                  issueKey: { type: 'string', description: '이슈 키 (예: PROJ-123)' }
-                },
-                required: ['issueKey']
-              }
-            },
-            {
-              name: 'search_issues',
-              description: 'JQL을 사용한 이슈 검색 (토큰 90% 절약)',
-              inputSchema: {
-                type: 'object',
-                properties: {
-                  jql: { type: 'string', description: 'JQL 쿼리 문자열' },
-                  maxResults: { type: 'number', description: '최대 결과 수', default: 25 }
-                },
-                required: ['jql']
-              }
-            },
-            {
-              name: 'create_issue',
-              description: '새 Jira 이슈 생성',
-              inputSchema: {
-                type: 'object',
-                properties: {
-                  projectKey: { type: 'string', description: '프로젝트 키 (예: PROJ)' },
-                  issueType: { type: 'string', description: '이슈 타입 (예: Task, Bug, Story)' },
-                  summary: { type: 'string', description: '이슈 제목' },
-                  description: { type: 'string', description: '이슈 설명' },
-                  assignee: { type: 'string', description: '담당자 사용자명 (선택사항)' }
-                },
-                required: ['projectKey', 'issueType', 'summary']
-              }
-            },
-            {
-              name: 'update_issue',
-              description: 'Jira 이슈 업데이트',
-              inputSchema: {
-                type: 'object',
-                properties: {
-                  issueKey: { type: 'string', description: '이슈 키 (예: PROJ-123)' },
-                  fields: { type: 'object', description: '업데이트할 필드들 (JSON 객체)' }
-                },
-                required: ['issueKey', 'fields']
-              }
-            },
-            {
-              name: 'get_issue_types',
-              description: '사용 가능한 이슈 타입 조회',
-              inputSchema: {
-                type: 'object',
-                properties: {
-                  projectKey: { type: 'string', description: '프로젝트 키 (선택사항)' }
-                }
-              }
-            },
-            {
-              name: 'add_comment',
-              description: 'Jira 이슈에 댓글 추가',
-              inputSchema: {
-                type: 'object',
-                properties: {
-                  issueKey: { type: 'string', description: '이슈 키 (예: PROJ-123)' },
-                  comment: { type: 'string', description: '댓글 내용' }
-                },
-                required: ['issueKey', 'comment']
-              }
-            },
-            {
-              name: 'get_current_user',
-              description: '현재 사용자 정보 조회',
-              inputSchema: {
-                type: 'object',
-                properties: {}
-              }
-            },
-            {
-              name: 'get_labels',
-              description: 'Labels 조회 (전체 또는 특정 프로젝트)',
-              inputSchema: {
-                type: 'object',
-                properties: {
-                  projectKey: { type: 'string', description: '프로젝트 키 (선택사항, 미지정시 전체 labels)' },
-                  maxResults: { type: 'number', description: '최대 결과 수', default: 50 }
-                }
-              }
-            },
-            {
-              name: 'get_fix_versions',
-              description: '프로젝트의 Fix Versions 조회',
-              inputSchema: {
-                type: 'object',
-                properties: {
-                  projectKey: { type: 'string', description: '프로젝트 키 (필수)' }
-                },
-                required: ['projectKey']
-              }
-            },
-            {
-              name: 'get_components',
-              description: '프로젝트의 Components 조회',
-              inputSchema: {
-                type: 'object',
-                properties: {
-                  projectKey: { type: 'string', description: '프로젝트 키 (필수)' }
-                },
-                required: ['projectKey']
-              }
+    try {
+      switch (method) {
+        case 'initialize':
+          return {
+            protocolVersion: '2024-11-05',
+            capabilities: { tools: {} },
+            serverInfo: {
+              name: 'jira-ultra-optimized',
+              version: '1.3.0',
+              description: 'Ultra-Optimized Jira MCP - JSON-RPC 프로토콜 개선, 90% 토큰 절약, 필드 선택, 한국어 지원'
             }
-          ]
-        };
+          };
 
-      case 'tools/call':
-        return await this.handleToolCall(params);
+        case 'tools/list':
+          return {
+            tools: [
+              {
+                name: 'get_projects',
+                description: 'Jira 프로젝트 목록 조회 (간소화된 정보)',
+                inputSchema: { type: 'object', properties: {} }
+              },
+              {
+                name: 'get_issue',
+                description: '특정 Jira 이슈 상세 조회 (필수 정보만)',
+                inputSchema: {
+                  type: 'object',
+                  properties: {
+                    issueKey: { type: 'string', description: '이슈 키 (예: PROJ-123)' }
+                  },
+                  required: ['issueKey']
+                }
+              },
+              {
+                name: 'search_issues',
+                description: 'JQL을 사용한 이슈 검색 (토큰 90% 절약)',
+                inputSchema: {
+                  type: 'object',
+                  properties: {
+                    jql: { type: 'string', description: 'JQL 쿼리 문자열' },
+                    maxResults: { type: 'number', description: '최대 결과 수', default: 25 }
+                  },
+                  required: ['jql']
+                }
+              },
+              {
+                name: 'create_issue',
+                description: '새 Jira 이슈 생성',
+                inputSchema: {
+                  type: 'object',
+                  properties: {
+                    projectKey: { type: 'string', description: '프로젝트 키 (예: PROJ)' },
+                    issueType: { type: 'string', description: '이슈 타입 (예: Task, Bug, Story)' },
+                    summary: { type: 'string', description: '이슈 제목' },
+                    description: { type: 'string', description: '이슈 설명' },
+                    assignee: { type: 'string', description: '담당자 사용자명 (선택사항)' }
+                  },
+                  required: ['projectKey', 'issueType', 'summary']
+                }
+              },
+              {
+                name: 'update_issue',
+                description: 'Jira 이슈 업데이트',
+                inputSchema: {
+                  type: 'object',
+                  properties: {
+                    issueKey: { type: 'string', description: '이슈 키 (예: PROJ-123)' },
+                    fields: { type: 'object', description: '업데이트할 필드들 (JSON 객체)' }
+                  },
+                  required: ['issueKey', 'fields']
+                }
+              },
+              {
+                name: 'get_issue_types',
+                description: '사용 가능한 이슈 타입 조회',
+                inputSchema: {
+                  type: 'object',
+                  properties: {
+                    projectKey: { type: 'string', description: '프로젝트 키 (선택사항)' }
+                  }
+                }
+              },
+              {
+                name: 'add_comment',
+                description: 'Jira 이슈에 댓글 추가',
+                inputSchema: {
+                  type: 'object',
+                  properties: {
+                    issueKey: { type: 'string', description: '이슈 키 (예: PROJ-123)' },
+                    comment: { type: 'string', description: '댓글 내용' }
+                  },
+                  required: ['issueKey', 'comment']
+                }
+              },
+              {
+                name: 'get_current_user',
+                description: '현재 사용자 정보 조회',
+                inputSchema: {
+                  type: 'object',
+                  properties: {}
+                }
+              },
+              {
+                name: 'get_labels',
+                description: 'Labels 조회 (전체 또는 특정 프로젝트)',
+                inputSchema: {
+                  type: 'object',
+                  properties: {
+                    projectKey: { type: 'string', description: '프로젝트 키 (선택사항, 미지정시 전체 labels)' },
+                    maxResults: { type: 'number', description: '최대 결과 수', default: 50 }
+                  }
+                }
+              },
+              {
+                name: 'get_fix_versions',
+                description: '프로젝트의 Fix Versions 조회',
+                inputSchema: {
+                  type: 'object',
+                  properties: {
+                    projectKey: { type: 'string', description: '프로젝트 키 (필수)' }
+                  },
+                  required: ['projectKey']
+                }
+              },
+              {
+                name: 'get_components',
+                description: '프로젝트의 Components 조회',
+                inputSchema: {
+                  type: 'object',
+                  properties: {
+                    projectKey: { type: 'string', description: '프로젝트 키 (필수)' }
+                  },
+                  required: ['projectKey']
+                }
+              }
+            ]
+          };
 
-      default:
-        throw new Error(`알 수 없는 메서드: ${method}`);
+        case 'tools/call':
+          return await this.handleToolCall(params);
+
+        default:
+          throw new Error(`Unknown method: ${method}`);
+      }
+    } catch (error) {
+      throw error;
     }
   }
 
@@ -673,18 +677,30 @@ class OptimizedJiraMCP {
 
       switch (name) {
         case 'get_projects':
+          if (!args || typeof args !== 'object') {
+            throw new Error('Invalid arguments format');
+          }
           result = await this.getProjects();
           break;
 
         case 'get_issue':
+          if (!args.issueKey) {
+            throw new Error('issueKey is required');
+          }
           result = await this.getIssue(args.issueKey);
           break;
 
         case 'search_issues':
+          if (!args.jql) {
+            throw new Error('jql is required');
+          }
           result = await this.searchIssues(args.jql, args.maxResults);
           break;
 
         case 'create_issue':
+          if (!args.projectKey || !args.issueType || !args.summary) {
+            throw new Error('projectKey, issueType, and summary are required');
+          }
           result = await this.createIssue(
             args.projectKey,
             args.issueType,
@@ -695,6 +711,9 @@ class OptimizedJiraMCP {
           break;
 
         case 'update_issue':
+          if (!args.issueKey || !args.fields) {
+            throw new Error('issueKey and fields are required');
+          }
           result = await this.updateIssue(args.issueKey, args.fields);
           break;
 
@@ -703,6 +722,9 @@ class OptimizedJiraMCP {
           break;
 
         case 'add_comment':
+          if (!args.issueKey || !args.comment) {
+            throw new Error('issueKey and comment are required');
+          }
           result = await this.addComment(args.issueKey, args.comment);
           break;
 
@@ -715,15 +737,21 @@ class OptimizedJiraMCP {
           break;
 
         case 'get_fix_versions':
+          if (!args.projectKey) {
+            throw new Error('projectKey is required');
+          }
           result = await this.getFixVersions(args.projectKey);
           break;
 
         case 'get_components':
+          if (!args.projectKey) {
+            throw new Error('projectKey is required');
+          }
           result = await this.getComponents(args.projectKey);
           break;
 
         default:
-          throw new Error(`알 수 없는 도구: ${name}`);
+          throw new Error(`Unknown tool: ${name}`);
       }
 
       return {
@@ -735,47 +763,101 @@ class OptimizedJiraMCP {
         ]
       };
     } catch (error) {
-      return {
-        content: [
-          {
-            type: 'text',
-            text: `❌  오류: ${error.message}`
-          }
-        ],
-        isError: true
-      };
+      // Return error in MCP format, but let the caller handle JSON-RPC error format
+      throw new Error(`Tool execution failed: ${error.message}`);
     }
   }
 
   async start() {
-    console.error('🚀 Ultra-Optimized Jira MCP 서버 v1.2.0 실행 중 (90% 토큰 절약, 필드 선택, 한국어 지원)');
+    console.error('🚀 Ultra-Optimized Jira MCP 서버 v1.3.0 실행 중 (JSON-RPC 프로토콜 개선, 90% 토큰 절약, 필드 선택, 한국어 지원)');
 
     process.stdin.setEncoding('utf8');
-    process.stdin.on('data', async (data) => {
-      try {
-        const lines = data.trim().split('\n');
-        for (const line of lines) {
-          if (!line.trim()) continue;
+    let buffer = '';
 
-          const request = JSON.parse(line);
+    process.stdin.on('data', async (data) => {
+      buffer += data;
+      const lines = buffer.split('\n');
+
+      // Keep the last (potentially incomplete) line in the buffer
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        if (!line.trim()) continue;
+
+        let request;
+        let requestId = null;
+
+        try {
+          request = JSON.parse(line);
+          requestId = request.id || null;
+        } catch (parseError) {
+          console.log(JSON.stringify({
+            jsonrpc: '2.0',
+            id: requestId,
+            error: {
+              code: -32700,
+              message: 'Parse error',
+              data: parseError.message
+            }
+          }));
+          continue;
+        }
+
+        try {
           const response = await this.handleRequest(request);
 
           console.log(JSON.stringify({
             jsonrpc: '2.0',
-            id: request.id,
+            id: requestId,
             result: response
           }));
-        }
-      } catch (error) {
-        console.log(JSON.stringify({
-          jsonrpc: '2.0',
-          id: null,
-          error: {
-            code: -32603,
-            message: error.message
+        } catch (error) {
+          let errorCode = -32603; // Internal error
+          let errorMessage = 'Internal error';
+
+          // More specific error codes based on the error type
+          if (error.message.includes('Unknown method')) {
+            errorCode = -32601;
+            errorMessage = 'Method not found';
+          } else if (error.message.includes('required') || error.message.includes('Invalid arguments')) {
+            errorCode = -32602;
+            errorMessage = 'Invalid params';
+          } else if (error.message.includes('Tool execution failed')) {
+            errorCode = -32000;
+            errorMessage = 'Tool execution error';
           }
-        }));
+
+          console.log(JSON.stringify({
+            jsonrpc: '2.0',
+            id: requestId,
+            error: {
+              code: errorCode,
+              message: errorMessage,
+              data: error.message
+            }
+          }));
+        }
       }
+    });
+
+    process.stdin.on('end', () => {
+      process.exit(0);
+    });
+
+    process.stdin.on('error', (error) => {
+      console.error('Stdin error:', error.message);
+      process.exit(1);
+    });
+
+    // Handle process termination gracefully
+    process.on('SIGINT', () => {
+      console.error('Received SIGINT, shutting down gracefully...');
+      process.exit(0);
+    });
+
+    process.on('SIGTERM', () => {
+      console.error('Received SIGTERM, shutting down gracefully...');
+      process.exit(0);
     });
   }
 }
