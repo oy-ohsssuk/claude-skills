@@ -6,12 +6,20 @@ const { convert } = require('html-to-text');
 
 class OptimizedJiraMCP {
   constructor() {
+    console.error('[DEBUG] Starting Jira MCP constructor');
+    console.error('[DEBUG] JIRA_BASE_URL:', process.env.JIRA_BASE_URL ? 'SET' : 'NOT SET');
+    console.error('[DEBUG] JIRA_API_TOKEN:', process.env.JIRA_API_TOKEN ? 'SET' : 'NOT SET');
+    
     this.baseUrl = process.env.JIRA_BASE_URL;
     this.token = process.env.JIRA_API_TOKEN;
 
     if (!this.baseUrl || !this.token) {
-      console.error('JIRA_BASE_URL and JIRA_API_TOKEN environment variables are required');
-      process.exit(1);
+      console.error('ERROR: JIRA_BASE_URL and JIRA_API_TOKEN environment variables are required');
+      console.error('Current env vars:');
+      console.error('JIRA_BASE_URL:', this.baseUrl);
+      console.error('JIRA_API_TOKEN:', this.token ? '[HIDDEN]' : 'undefined');
+      // Don't exit, let MCP handle the error
+      return;
     }
 
     // Jira 브라우저 URL (이슈 링크 생성용)
@@ -521,8 +529,7 @@ class OptimizedJiraMCP {
   async handleRequest(request) {
     const { method, params = {} } = request;
 
-    try {
-      switch (method) {
+    switch (method) {
         case 'initialize':
           return {
             protocolVersion: '2024-11-05',
@@ -663,9 +670,6 @@ class OptimizedJiraMCP {
 
         default:
           throw new Error(`Unknown method: ${method}`);
-      }
-    } catch (error) {
-      throw error;
     }
   }
 
@@ -771,6 +775,14 @@ class OptimizedJiraMCP {
   async start() {
     console.error('🚀 Ultra-Optimized Jira MCP 서버 v1.3.0 실행 중 (JSON-RPC 프로토콜 개선, 90% 토큰 절약, 필드 선택, 한국어 지원)');
 
+    // URL 유효성 검사만 수행 (연결 테스트 제거)
+    try {
+      new URL(this.baseUrl);
+    } catch (error) {
+      console.error(`Invalid JIRA_BASE_URL: ${error.message}`);
+      process.exit(1);
+    }
+
     process.stdin.setEncoding('utf8');
     let buffer = '';
 
@@ -789,7 +801,7 @@ class OptimizedJiraMCP {
 
         try {
           request = JSON.parse(line);
-          requestId = request.id || null;
+          requestId = request.id !== undefined ? request.id : null;
         } catch (parseError) {
           console.log(JSON.stringify({
             jsonrpc: '2.0',
@@ -803,14 +815,23 @@ class OptimizedJiraMCP {
           continue;
         }
 
+        // Handle notifications separately (no response needed)
+        if (request.method && (request.method.startsWith('notifications/') || request.method === 'initialized')) {
+          // Notifications don't need responses
+          continue;
+        }
+
         try {
           const response = await this.handleRequest(request);
 
-          console.log(JSON.stringify({
-            jsonrpc: '2.0',
-            id: requestId,
-            result: response
-          }));
+          // Send response if we have a requestId (response can be any value including null/undefined)
+          if (requestId !== null) {
+            console.log(JSON.stringify({
+              jsonrpc: '2.0',
+              id: requestId,
+              result: response
+            }));
+          }
         } catch (error) {
           let errorCode = -32603; // Internal error
           let errorMessage = 'Internal error';

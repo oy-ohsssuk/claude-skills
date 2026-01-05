@@ -1389,84 +1389,101 @@ class ConfluenceOptimizedMCP {
   }
 
   async start() {
-    console.error("Confluence Optimized MCP v2 Server running on stdio");
+    console.error("Confluence Optimized MCP v2 Server running on stdio - JSON-RPC 프로토콜 개선됨");
 
     process.stdin.setEncoding("utf8");
+    let buffer = '';
+
     process.stdin.on("data", async (data) => {
-      try {
-        const lines = data.trim().split("\n");
-        for (const line of lines) {
-          if (!line.trim()) continue;
+      buffer += data;
+      const lines = buffer.split('\n');
 
-          // Add better error handling for JSON parsing
-          let request;
-          try {
-            request = JSON.parse(line);
-          } catch (parseError) {
-            console.error(`[CONFLUENCE MCP] Failed to parse JSON: ${line}`, parseError);
-            // Send proper error response
-            console.log(
-              JSON.stringify({
-                jsonrpc: "2.0",
-                id: 0,
-                error: {
-                  code: -32700,
-                  message: "Parse error",
-                },
-              })
-            );
-            continue;
-          }
+      // Keep the last (potentially incomplete) line in the buffer
+      buffer = lines.pop() || '';
 
-          try {
-            const response = await this.handleRequest(request);
+      for (const line of lines) {
+        if (!line.trim()) continue;
 
-            console.log(
-              JSON.stringify({
-                jsonrpc: "2.0",
-                id: request.id,
-                result: response,
-              })
-            );
-          } catch (requestError) {
-            console.error(`[CONFLUENCE MCP] Request handling error:`, requestError);
-            console.log(
-              JSON.stringify({
-                jsonrpc: "2.0",
-                id: request.id || 0,
-                error: {
-                  code: -32603,
-                  message: requestError.message,
-                },
-              })
-            );
-          }
-        }
-      } catch (error) {
-        // Try to get the request id if possible, otherwise use a default
-        let requestId = 0;
+        let request;
+        let requestId = null;
+
         try {
-          if (data.includes('"id"')) {
-            const idMatch = data.match(/"id"\s*:\s*([^,}\s]+)/);
-            if (idMatch) {
-              requestId = JSON.parse(idMatch[1]);
-            }
-          }
-        } catch (e) {
-          // Use default id if parsing fails
-        }
-
-        console.log(
-          JSON.stringify({
+          request = JSON.parse(line);
+          requestId = request.id !== undefined ? request.id : null;
+        } catch (parseError) {
+          console.log(JSON.stringify({
             jsonrpc: "2.0",
             id: requestId,
             error: {
-              code: -32603,
-              message: error.message,
-            },
-          })
-        );
+              code: -32700,
+              message: "Parse error",
+              data: parseError.message
+            }
+          }));
+          continue;
+        }
+
+        // Handle notifications separately (no response needed)
+        if (request.method && (request.method.startsWith('notifications/') || request.method === 'initialized')) {
+          // Notifications don't need responses
+          continue;
+        }
+
+        try {
+          const response = await this.handleRequest(request);
+
+          // Send response if we have a requestId (response can be any value including null/undefined)
+          if (requestId !== null) {
+            console.log(JSON.stringify({
+              jsonrpc: "2.0",
+              id: requestId,
+              result: response
+            }));
+          }
+        } catch (error) {
+          let errorCode = -32603; // Internal error
+          let errorMessage = "Internal error";
+
+          // More specific error codes based on the error type
+          if (error.message.includes('Unknown method')) {
+            errorCode = -32601;
+            errorMessage = 'Method not found';
+          } else if (error.message.includes('required') || error.message.includes('Invalid arguments')) {
+            errorCode = -32602;
+            errorMessage = 'Invalid params';
+          }
+
+          console.log(JSON.stringify({
+            jsonrpc: "2.0",
+            id: requestId,
+            error: {
+              code: errorCode,
+              message: errorMessage,
+              data: error.message
+            }
+          }));
+        }
       }
+    });
+
+    process.stdin.on('end', () => {
+      process.exit(0);
+    });
+
+    process.stdin.on('error', (error) => {
+      console.error('Stdin error:', error.message);
+      process.exit(1);
+    });
+
+    // Handle process termination gracefully
+    process.on('SIGINT', () => {
+      console.error('Received SIGINT, shutting down gracefully...');
+      process.exit(0);
+    });
+
+    process.on('SIGTERM', () => {
+      console.error('Received SIGTERM, shutting down gracefully...');
+      process.exit(0);
     });
   }
 }
