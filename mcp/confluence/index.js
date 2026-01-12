@@ -8,6 +8,7 @@ class ConfluenceOptimizedMCP {
   constructor() {
     this.baseUrl = process.env.CONFLUENCE_BASE_URL;
     this.token = process.env.CONFLUENCE_API_TOKEN;
+    this.username = process.env.CONFLUENCE_USERNAME;
     this.cache = new Map();
     this.cacheTimeout = 5 * 60 * 1000; // 5분 캐시
 
@@ -113,16 +114,15 @@ class ConfluenceOptimizedMCP {
     };
 
     if (!this.baseUrl || !this.token) {
-      console.error(
-        "CONFLUENCE_BASE_URL and CONFLUENCE_API_TOKEN environment variables are required"
-      );
+      console.error("Missing CONFLUENCE_BASE_URL or CONFLUENCE_API_TOKEN");
       process.exit(1);
     }
   }
 
   // 캐시 관리
   getCacheKey(endpoint, params = {}) {
-    return `${endpoint}:${JSON.stringify(params)}`;
+    const paramStr = Object.keys(params).length > 0 ? `:${Object.values(params).join(',')}` : '';
+    return `${endpoint}${paramStr}`;
   }
 
   getFromCache(key) {
@@ -240,7 +240,24 @@ class ConfluenceOptimizedMCP {
     return html;
   }
 
-  // 텍스트 정리 (라이브러리 사용) - 전처리 추가, 길이 제한 없음
+  // 간단한 HTML 정리 - 토큰 절약용
+  cleanHtmlSimple(html) {
+    if (!html) return "";
+
+    try {
+      return html
+        .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '') // 스크립트 제거
+        .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '') // 스타일 제거
+        .replace(/<[^>]+>/g, '') // 모든 HTML 태그 제거
+        .replace(/\s+/g, ' ') // 여러 공백을 하나로
+        .replace(/\n\s*\n/g, '\n') // 빈 줄 정리
+        .trim();
+    } catch (error) {
+      return html.replace(/<[^>]*>/g, "").trim();
+    }
+  }
+
+  // 기존 복잡한 정리 함수 - 필요시에만 사용
   cleanHtmlToText(html) {
     if (!html) return "";
 
@@ -253,17 +270,19 @@ class ConfluenceOptimizedMCP {
 
       return cleanText;
     } catch (error) {
-      console.error("HTML cleaning error:", error);
       return this.preprocessHtml(html)
         .replace(/<[^>]*>/g, "")
         .trim();
     }
   }
 
-  // 응답 최적화 - 단순화
+  // 응답 최적화 - 토큰 절약 최우선
   optimizeResponse(data, options = {}) {
-    const { fields = ["id", "title", "type", "status"], includeBody = false } =
-      options;
+    const {
+      fields = ["id", "title", "type", "status"],
+      includeBody = false,
+      maxBodyLength = 500  // 기본 500자로 제한
+    } = options;
 
     if (!data) return data;
 
@@ -274,42 +293,35 @@ class ConfluenceOptimizedMCP {
     if (typeof data === "object") {
       const optimized = {};
 
-      // 필수 필드만 포함
+      // 핵심 필드만 포함
       fields.forEach((field) => {
         if (data[field] !== undefined) {
           optimized[field] = data[field];
         }
       });
 
-      // body 처리 - HTML을 깨끗한 텍스트로 변환
+      // body 처리 - 극도로 최소화
       if (includeBody && data.body?.storage?.value) {
         const originalHtml = data.body.storage.value;
+        let content = this.cleanHtmlSimple(originalHtml);
+
+        // 길이 제한 적용
+        if (content.length > maxBodyLength) {
+          content = content.substring(0, maxBodyLength) + "...";
+        }
+
         optimized.body = {
-          content: this.cleanHtmlToText(originalHtml),
-          originalLength: originalHtml.length,
+          content: content,
+          truncated: content.length > maxBodyLength
         };
       }
 
-      // 최소한의 메타데이터
-      if (data.version) {
-        optimized.version = {
-          number: data.version.number,
-        };
-
-        // 작성자 정보 포함
-        if (data.version.by) {
-          optimized.version.by = {
-            displayName: data.version.by.displayName,
-            username: data.version.by.username || data.version.by.userKey,
-          };
-        }
-
-        // 수정 시간 포함
-        if (data.version.when) {
-          optimized.version.when = data.version.when;
-        }
+      // 최소 버전 정보만
+      if (data.version?.number) {
+        optimized.version = { number: data.version.number };
       }
 
+      // 웹 링크만
       if (data._links?.webui) {
         optimized.webui = data._links.webui;
       }
@@ -420,15 +432,27 @@ class ConfluenceOptimizedMCP {
     }
   }
 
-  // 페이지 조회 - 단순화
-  async getPage(pageId) {
+  // 페이지 조회 - 토큰 최적화
+  async getPage(pageId, options = {}) {
+    const {
+      includeBody = true,
+      bodyLength = 1000, // 기본 1000자만
+      fullContent = false // true시 전체 내용
+    } = options;
+
     try {
+      const expandParams = fullContent
+        ? "body.storage,version,space"
+        : "version,space";
+
       const result = await this.makeRequest(
-        `/content/${pageId}?expand=body.storage,version`
+        `/content/${pageId}?expand=${expandParams}`
       );
+
       return this.optimizeResponse(result, {
         fields: ["id", "title", "type", "status"],
-        includeBody: true,
+        includeBody: includeBody,
+        maxBodyLength: bodyLength,
       });
     } catch (error) {
       throw error;
@@ -462,6 +486,21 @@ class ConfluenceOptimizedMCP {
 
   async searchPagesCompact(query, limit = 10) {
     try {
+      // 입력이 순수 숫자인지 확인 (페이지 ID 검색) - 토큰 절약
+      const trimmedQuery = query.trim();
+      if (/^\d+$/.test(trimmedQuery)) {
+        try {
+          const page = await this.getPage(trimmedQuery, { bodyLength: 500 });
+          return {
+            results: [page],
+            size: 1,
+            limit: limit
+          };
+        } catch (pageError) {
+          // 조용히 fallback
+        }
+      }
+
       // CQL 쿼리 검증 및 최적화
       const cleanedQuery = this.validateAndOptimizeCQL(query);
 
@@ -481,8 +520,7 @@ class ConfluenceOptimizedMCP {
         encodedQuery = encodeURIComponent(cleanedQuery);
       }
 
-      console.error(`[DEBUG] Original query: ${cleanedQuery}`);
-      console.error(`[DEBUG] Encoded query: ${encodedQuery}`);
+      // 디버깅 로그 제거 (토큰 절약)
 
       const result = await this.makeRequest(
         `/content/search?cql=${encodedQuery}&limit=${limit}`
@@ -513,19 +551,14 @@ class ConfluenceOptimizedMCP {
         limit: result.limit || limit,
       };
     } catch (error) {
-      console.error(`[ERROR] CQL Search failed: ${error.message}`);
-      console.error(`[ERROR] Query was: ${query}`);
-
-      // 500 에러인 경우 더 간단한 검색으로 fallback
+      // 토큰 절약: 로그 제거, 간단한 fallback만
       if (error.message.includes('500')) {
-        console.error('[FALLBACK] Trying simpler text search...');
         try {
           return await this.searchPagesSimple(query, limit);
         } catch (fallbackError) {
-          console.error(`[FALLBACK ERROR] ${fallbackError.message}`);
+          // 조용히 실패
         }
       }
-
       throw error;
     }
   }
@@ -569,8 +602,7 @@ class ConfluenceOptimizedMCP {
       return {
         results: result.results || [],
         size: result.size || 0,
-        limit: result.limit || limit,
-        note: "Fallback search used due to complex query failure"
+        limit: result.limit || limit
       };
     } catch (error) {
       throw new Error(`Simple search also failed: ${error.message}`);
@@ -625,8 +657,7 @@ class ConfluenceOptimizedMCP {
       return {
         results: result.results || [],
         size: result.size || 0,
-        limit: result.limit || limit,
-        method: "spaceKey parameter search"
+        limit: result.limit || limit
       };
     } catch (error) {
       throw error;
@@ -1023,7 +1054,7 @@ class ConfluenceOptimizedMCP {
             tools: {},
           },
           serverInfo: {
-            name: "confluence-optimized-v2",
+            name: "confluence-mcp",
             version: "2.0.0",
           },
         };
@@ -1389,7 +1420,7 @@ class ConfluenceOptimizedMCP {
   }
 
   async start() {
-    console.error("Confluence Optimized MCP v2 Server running on stdio - JSON-RPC 프로토콜 개선됨");
+    console.error("Confluence MCP v2 ready");
 
     process.stdin.setEncoding("utf8");
     let buffer = '';
@@ -1471,18 +1502,15 @@ class ConfluenceOptimizedMCP {
     });
 
     process.stdin.on('error', (error) => {
-      console.error('Stdin error:', error.message);
       process.exit(1);
     });
 
     // Handle process termination gracefully
     process.on('SIGINT', () => {
-      console.error('Received SIGINT, shutting down gracefully...');
       process.exit(0);
     });
 
     process.on('SIGTERM', () => {
-      console.error('Received SIGTERM, shutting down gracefully...');
       process.exit(0);
     });
   }
