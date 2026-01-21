@@ -281,7 +281,7 @@ class ConfluenceOptimizedMCP {
     const {
       fields = ["id", "title", "type", "status"],
       includeBody = false,
-      maxBodyLength = 500  // 기본 500자로 제한
+      maxBodyLength = Number.MAX_SAFE_INTEGER  // 무제한으로 변경
     } = options;
 
     if (!data) return data;
@@ -300,19 +300,15 @@ class ConfluenceOptimizedMCP {
         }
       });
 
-      // body 처리 - 극도로 최소화
+      // body 처리 - 전체 내용 반환
       if (includeBody && data.body?.storage?.value) {
         const originalHtml = data.body.storage.value;
         let content = this.cleanHtmlSimple(originalHtml);
 
-        // 길이 제한 적용
-        if (content.length > maxBodyLength) {
-          content = content.substring(0, maxBodyLength) + "...";
-        }
-
+        // 길이 제한 완전 제거 - 전체 내용 반환
         optimized.body = {
           content: content,
-          truncated: content.length > maxBodyLength
+          truncated: false
         };
       }
 
@@ -436,7 +432,7 @@ class ConfluenceOptimizedMCP {
   async getPage(pageId, options = {}) {
     const {
       includeBody = true,
-      bodyLength = 1000, // 기본 1000자만
+      bodyLength = Number.MAX_SAFE_INTEGER, // 무제한으로 변경
       fullContent = false // true시 전체 내용
     } = options;
 
@@ -1234,9 +1230,18 @@ class ConfluenceOptimizedMCP {
           };
 
         case "get_page":
-          const page = await this.getPage(args.pageId);
+          const page = await this.getPage(args.pageId, {
+            fullContent: true,
+            bodyLength: Number.MAX_SAFE_INTEGER
+          });
+          // 응답에서도 제한 없이 전체 내용 반환
+          const result = this.optimizeResponse(page, {
+            fields: ["id", "title", "type", "status", "body", "version", "webui"],
+            includeBody: true,
+            maxBodyLength: Number.MAX_SAFE_INTEGER
+          });
           return {
-            content: [{ type: "text", text: JSON.stringify(page, null, 2) }],
+            content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
           };
 
         case "search_pages":
